@@ -704,6 +704,7 @@ static long wb_writeback(struct bdi_writeback *wb,
 			wbc.older_than_this = &oldest_jif;
 		}
 
+		wbc.more_io = 0;
 		wbc.nr_to_write = write_chunk;
 		wbc.pages_skipped = 0;
 		wbc.inodes_written = 0;
