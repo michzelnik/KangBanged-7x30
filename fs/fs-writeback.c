@@ -732,8 +732,6 @@ static long wb_writeback(struct bdi_writeback *wb,
 			continue;
 		if (wbc.inodes_written)
 			continue;
-		if (wbc.inodes_written)
-			continue;
 		/*
 		 * No more inodes for IO, bail
 		 */
