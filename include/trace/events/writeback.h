@@ -8,6 +8,19 @@
 #include <linux/device.h>
 #include <linux/writeback.h>
 
+#define show_inode_state(state)					\
+	__print_flags(state, "|",				\
+		{I_DIRTY_SYNC,		"I_DIRTY_SYNC"},	\
+		{I_DIRTY_DATASYNC,	"I_DIRTY_DATASYNC"},	\
+		{I_DIRTY_PAGES,		"I_DIRTY_PAGES"},	\
+		{I_NEW,			"I_NEW"},		\
+		{I_WILL_FREE,		"I_WILL_FREE"},		\
+		{I_FREEING,		"I_FREEING"},		\
+		{I_CLEAR,		"I_CLEAR"},		\
+		{I_SYNC,		"I_SYNC"},		\
+		{I_REFERENCED,		"I_REFERENCED"}		\
+	)
+
 struct wb_writeback_work;
 
 DECLARE_EVENT_CLASS(writeback_work_class,
@@ -23,10 +36,7 @@ DECLARE_EVENT_CLASS(writeback_work_class,
 		__field(int, for_background)
 	),
 	TP_fast_assign(
-		struct device *dev = bdi->dev;
-		if (!dev)
-			dev = default_backing_dev_info.dev;
-		strncpy(__entry->name, dev_name(dev), 32);
+		strncpy(__entry->name, dev_name(bdi->dev), 32);
 		__entry->nr_pages = work->nr_pages;
 		__entry->sb_dev = work->sb ? work->sb->s_dev : 0;
 		__entry->sync_mode = work->sync_mode;
@@ -152,31 +162,6 @@ DEFINE_WBC_EVENT(wbc_balance_dirty_written);
 DEFINE_WBC_EVENT(wbc_balance_dirty_wait);
 DEFINE_WBC_EVENT(wbc_writepage);
 
-TRACE_EVENT(writeback_queue_io,
-	TP_PROTO(struct bdi_writeback *wb,
-		 unsigned long *older_than_this,
-		 int moved),
-	TP_ARGS(wb, older_than_this, moved),
-	TP_STRUCT__entry(
-		__array(char,		name, 32)
-		__field(unsigned long,	older)
-		__field(long,		age)
-		__field(int,		moved)
-	),
-	TP_fast_assign(
-		strncpy(__entry->name, dev_name(wb->bdi->dev), 32);
-		__entry->older	= older_than_this ?  *older_than_this : 0;
-		__entry->age	= older_than_this ?
-				  (jiffies - *older_than_this) * 1000 / HZ : -1;
-		__entry->moved	= moved;
-	),
-	TP_printk("bdi %s: older=%lu age=%ld enqueue=%d",
-		__entry->name,
-		__entry->older,	/* older_than_this in jiffies */
-		__entry->age,	/* older_than_this in relative milliseconds */
-		__entry->moved)
-);
-
 DECLARE_EVENT_CLASS(writeback_congest_waited_template,
 
 	TP_PROTO(unsigned int usec_timeout, unsigned int usec_delayed),
@@ -225,7 +210,7 @@ DECLARE_EVENT_CLASS(writeback_single_inode_template,
 		__array(char, name, 32)
 		__field(unsigned long, ino)
 		__field(unsigned long, state)
-		__field(unsigned long, dirtied_when)
+		__field(unsigned long, age)
 		__field(unsigned long, writeback_index)
 		__field(long, nr_to_write)
 		__field(unsigned long, wrote)
@@ -236,19 +221,19 @@ DECLARE_EVENT_CLASS(writeback_single_inode_template,
 			dev_name(inode->i_mapping->backing_dev_info->dev), 32);
 		__entry->ino		= inode->i_ino;
 		__entry->state		= inode->i_state;
-		__entry->dirtied_when	= inode->dirtied_when;
+		__entry->age		= (jiffies - inode->dirtied_when) *
+								1000 / HZ;
 		__entry->writeback_index = inode->i_mapping->writeback_index;
 		__entry->nr_to_write	= nr_to_write;
 		__entry->wrote		= nr_to_write - wbc->nr_to_write;
 	),
 
-	TP_printk("bdi %s: ino=%lu state=%s dirtied_when=%lu age=%lu "
+	TP_printk("bdi %s: ino=%lu state=%s age=%lu "
 		  "index=%lu to_write=%ld wrote=%lu",
 		  __entry->name,
 		  __entry->ino,
 		  show_inode_state(__entry->state),
-		  __entry->dirtied_when,
-		  (jiffies - __entry->dirtied_when) / HZ,
+		  __entry->age,
 		  __entry->writeback_index,
 		  __entry->nr_to_write,
 		  __entry->wrote

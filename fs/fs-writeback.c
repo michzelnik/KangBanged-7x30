@@ -248,16 +248,15 @@ static bool inode_dirtied_after(struct inode *inode, unsigned long t)
 /*
  * Move expired dirty inodes from @delaying_queue to @dispatch_queue.
  */
-static int move_expired_inodes(struct list_head *delaying_queue,
+static void move_expired_inodes(struct list_head *delaying_queue,
 			       struct list_head *dispatch_queue,
-			       unsigned long *older_than_this)
+				unsigned long *older_than_this)
 {
 	LIST_HEAD(tmp);
 	struct list_head *pos, *node;
 	struct super_block *sb = NULL;
 	struct inode *inode;
 	int do_sb_sort = 0;
-	int moved = 0;
 
 	while (!list_empty(delaying_queue)) {
 		inode = wb_inode(delaying_queue->prev);
@@ -268,13 +267,12 @@ static int move_expired_inodes(struct list_head *delaying_queue,
 			do_sb_sort = 1;
 		sb = inode->i_sb;
 		list_move(&inode->i_wb_list, &tmp);
-		moved++;
 	}
 
 	/* just one sb in list, splice to dispatch_queue and we're done */
 	if (!do_sb_sort) {
 		list_splice(&tmp, dispatch_queue);
-		goto out;
+		return;
 	}
 
 	/* Move inodes from one superblock together */
@@ -286,8 +284,6 @@ static int move_expired_inodes(struct list_head *delaying_queue,
 				list_move(&inode->i_wb_list, dispatch_queue);
 		}
 	}
-out:
-	return moved;
 }
 
 /*
@@ -303,11 +299,9 @@ out:
  */
 static void queue_io(struct bdi_writeback *wb, unsigned long *older_than_this)
 {
-	int moved;
 	assert_spin_locked(&wb->list_lock);
 	list_splice_init(&wb->b_more_io, &wb->b_io);
-	moved = move_expired_inodes(&wb->b_dirty, &wb->b_io, older_than_this);
-	trace_writeback_queue_io(wb, older_than_this, moved);
+	move_expired_inodes(&wb->b_dirty, &wb->b_io, older_than_this);
 }
 
 static int write_inode(struct inode *inode, struct writeback_control *wbc)
@@ -352,6 +346,7 @@ writeback_single_inode(struct inode *inode, struct bdi_writeback *wb,
 		       struct writeback_control *wbc)
 {
 	struct address_space *mapping = inode->i_mapping;
+	long nr_to_write = wbc->nr_to_write;
 	unsigned dirty;
 	int ret;
 
@@ -374,6 +369,8 @@ writeback_single_inode(struct inode *inode, struct bdi_writeback *wb,
 		 */
 		if (wbc->sync_mode != WB_SYNC_ALL) {
 			requeue_io(inode, wb);
+			trace_writeback_single_inode_requeue(inode, wbc,
+							     nr_to_write);
 			return 0;
 		}
 
@@ -473,6 +470,7 @@ writeback_single_inode(struct inode *inode, struct bdi_writeback *wb,
 		}
 	}
 	inode_sync_complete(inode);
+	trace_writeback_single_inode(inode, wbc, nr_to_write);
 	return ret;
 }
 
@@ -578,13 +576,6 @@ static void __writeback_inodes_wb(struct bdi_writeback *wb,
 {
 	int ret = 0;
 
-	if (!wbc->wb_start)
-		wbc->wb_start = jiffies; /* livelock avoidance */
-	spin_lock(&inode_wb_list_lock);
-
-	if (list_empty(&wb->b_io))
-		queue_io(wb, wbc->older_than_this);
-
 	while (!list_empty(&wb->b_io)) {
 		struct inode *inode = wb_inode(wb->b_io.prev);
 		struct super_block *sb = inode->i_sb;
@@ -605,7 +596,7 @@ static void __writeback_inodes_wb(struct bdi_writeback *wb,
 void writeback_inodes_wb(struct bdi_writeback *wb,
 		struct writeback_control *wbc)
 {
-	spin_lock(&inode_wb_list_lock);
+	spin_lock(&wb->list_lock);
 	if (list_empty(&wb->b_io))
 		queue_io(wb, wbc->older_than_this);
 	__writeback_inodes_wb(wb, wbc);
@@ -717,7 +708,6 @@ static long wb_writeback(struct bdi_writeback *wb,
 			wbc.older_than_this = &oldest_jif;
 		}
 
-		wbc.more_io = 0;
 		wbc.nr_to_write = write_chunk;
 		wbc.pages_skipped = 0;
 		wbc.inodes_written = 0;
@@ -743,8 +733,6 @@ static long wb_writeback(struct bdi_writeback *wb,
 		 * as made some progress on cleaning pages or inodes.
 		 */
 		if (wbc.nr_to_write < write_chunk)
-			continue;
-		if (wbc.inodes_written)
 			continue;
 		if (wbc.inodes_written)
 			continue;
@@ -1048,7 +1036,7 @@ void __mark_inode_dirty(struct inode *inode, int flags)
 	if ((inode->i_state & flags) == flags)
 		return;
 
-	if (unlikely(block_dump > 1))
+	if (unlikely(block_dump))
 		block_dump___mark_inode_dirty(inode);
 
 	spin_lock(&inode->i_lock);
