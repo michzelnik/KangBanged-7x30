@@ -4922,37 +4922,22 @@ static u32 transport_generic_get_cdb_count(
 {
 	unsigned char *cdb = NULL;
 	struct se_task *task;
-	struct se_mem *se_mem = NULL, *se_mem_lout = NULL;
-	struct se_mem *se_mem_bidi = NULL, *se_mem_bidi_lout = NULL;
-	struct se_device *dev = SE_DEV(cmd);
-	int max_sectors_set = 0, ret;
-	u32 task_offset_in = 0, se_mem_cnt = 0, se_mem_bidi_cnt = 0, task_cdbs = 0;
+	struct se_device *dev = cmd->se_dev;
+	unsigned long flags;
+	int task_count, i, ret;
+	sector_t sectors, dev_max_sectors = dev->se_sub_dev->se_dev_attrib.max_sectors;
+	u32 sector_size = dev->se_sub_dev->se_dev_attrib.block_size;
+	struct scatterlist *sg;
+	struct scatterlist *cmd_sg;
 
-	if (!mem_list) {
-		printk(KERN_ERR "mem_list is NULL in transport_generic_get"
-				"_cdb_count()\n");
-		return 0;
-	}
-	/*
-	 * While using RAMDISK_DR backstores is the only case where
-	 * mem_list will ever be empty at this point.
-	 */
-	if (!(list_empty(mem_list)))
-		se_mem = list_entry(mem_list->next, struct se_mem, se_list);
-	/*
-	 * Check for extra se_mem_bidi mapping for BIDI-COMMANDs to
-	 * struct se_task->task_sg_bidi for TCM/pSCSI passthrough operation
-	 */
-	if ((T_TASK(cmd)->t_mem_bidi_list != NULL) &&
-	    !(list_empty(T_TASK(cmd)->t_mem_bidi_list)) &&
-	    (TRANSPORT(dev)->transport_type == TRANSPORT_PLUGIN_PHBA_PDEV))
-		se_mem_bidi = list_entry(T_TASK(cmd)->t_mem_bidi_list->next,
-					struct se_mem, se_list);
-
-	while (sectors) {
-		DEBUG_VOL("ITT[0x%08x] LBA(%llu) SectorsLeft(%u) EOBJ(%llu)\n",
-			CMD_TFO(cmd)->get_task_tag(cmd), lba, sectors,
-			transport_dev_end_lba(dev));
+	WARN_ON(cmd->data_length % sector_size);
+	sectors = DIV_ROUND_UP(cmd->data_length, sector_size);
+	task_count = DIV_ROUND_UP_SECTOR_T(sectors, dev_max_sectors);
+	
+	cmd_sg = sgl;
+	for (i = 0; i < task_count; i++) {
+		unsigned int task_size;
+		int count;
 
 		task = transport_generic_get_task(cmd, data_direction);
 		if (!(task))
