@@ -1248,7 +1248,7 @@ static pgoff_t ext4_num_dirty_pages(struct inode *inode, pgoff_t idx,
  * the buffer head is mapped.
  *
  * It returns 0 if plain look up failed (blocks have not been allocated), in
- * that casem, buffer head is unmapped
+ * that case, buffer head is unmapped
  *
  * It returns the error in case of allocation failure.
  */
@@ -1287,7 +1287,7 @@ int ext4_map_blocks(handle_t *handle, struct inode *inode,
 	 * Returns if the blocks have already allocated
 	 *
 	 * Note that if blocks have been preallocated
-	 * ext4_ext_get_block() returns th create = 0
+	 * ext4_ext_get_block() returns the create = 0
 	 * with buffer head unmapped.
 	 */
 	if (retval > 0 && map->m_flags & EXT4_MAP_MAPPED)
