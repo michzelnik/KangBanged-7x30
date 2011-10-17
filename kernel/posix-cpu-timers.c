@@ -274,7 +274,6 @@ void thread_group_cputimer(struct task_struct *tsk, struct task_cputime *times)
 	struct task_cputime sum;
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&cputimer->lock, flags);
 	if (!cputimer->running) {
 		/*
 		 * The POSIX timer interface allows for absolute time expiry
