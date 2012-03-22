@@ -5009,8 +5009,8 @@ int ext4_trim_fs(struct super_block *sb, struct fstrim_range *range)
 		 */
 		first_cluster = 0;
 	}
-	range->len = trimmed * sb->s_blocksize;
 
 out:
+	range->len = trimmed * sb->s_blocksize;
 	return ret;
 }
