@@ -20,7 +20,7 @@
 #include <linux/bma150.h>
 #include <asm/gpio.h>
 #include <linux/delay.h>
-#include<linux/earlysuspend.h>
+#include <linux/earlysuspend.h>
 
 /*#define EARLY_SUSPEND_BMA 1*/
 
@@ -594,4 +594,3 @@ module_exit(bma150_exit);
 
 MODULE_DESCRIPTION("BMA150 G-sensor driver");
 MODULE_LICENSE("GPL");
-
