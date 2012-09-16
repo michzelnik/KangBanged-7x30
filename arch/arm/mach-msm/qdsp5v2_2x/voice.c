@@ -205,12 +205,17 @@ static void voice_auddev_cb_function(u32 evt_id,
 				/* block to wait for CHANGE_START */
 				pr_aud_info("start waiting for "
 					"voc_state -> VOICE_CHANGE\n");
-				rc = wait_event_interruptible(
+				/*Add timeout for wait event interruptible*/
+				rc = wait_event_interruptible_timeout(
 				v->voc_wait, (v->voc_state == VOICE_CHANGE)
-				|| (atomic_read(&v->rel_start_flag) == 1));
+				|| (atomic_read(&v->rel_start_flag) == 1), msecs_to_jiffies(1000));
+				if (rc == 0) {
+					pr_aud_info("wait timeout, voc_state = %d\n", v->voc_state);
+					return;
+				}
 				pr_aud_info("wait done, voc_state = %d\n", v->voc_state);
 			} else {
-				pr_aud_err("Get AUDDEV_EVT_DEV_CHG_VOICE "
+				pr_aud_info("Get AUDDEV_EVT_DEV_CHG_VOICE "
 				       "at improper voc_state %d\n", v->voc_state);
 				voice_cmd_change();
 			}
@@ -219,7 +224,7 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_rx.enabled = VOICE_DEV_DISABLED;
 				v->dev_tx.enabled = VOICE_DEV_DISABLED;
 		} else {
-			pr_aud_err("Get AUDDEV_EVT_DEV_CHG_VOICE "
+			pr_aud_info("Get AUDDEV_EVT_DEV_CHG_VOICE "
 			       "at improper dev_state %d\n", v->dev_state);
 			voice_cmd_change();
 		}
@@ -791,7 +796,7 @@ static int voice_thread(void *data)
 				v->voc_state = VOICE_ACQUIRE;
 				pr_aud_info("voc_state -> VOICE_ACQUIRE\n");
 			} else {
-				pr_aud_err("Get DEV_CHANGE_READY "
+				pr_aud_info("Get DEV_CHANGE_READY "
 					"at the wrong voc_state %d\n", v->voc_state);
 				voice_cmd_device_info(v);
 			}

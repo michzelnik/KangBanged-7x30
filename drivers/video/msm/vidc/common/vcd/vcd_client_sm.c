@@ -96,8 +96,8 @@ static u32 vcd_encode_start_in_open(struct vcd_clnt_ctxt *cctxt)
 		 cctxt->in_buf_pool.validated != cctxt->in_buf_pool.count) ||
 	    cctxt->out_buf_pool.validated !=
 	    cctxt->out_buf_pool.count) {
-		VCD_MSG_HIGH("%s: Buffer pool is not completely setup yet",
-			__func__);
+		VCD_MSG_ERROR("Buffer pool is not completely setup yet");
+		return VCD_ERR_BAD_STATE;
 	}
 
 	rc = vcd_sched_add_client(cctxt);
@@ -541,12 +541,6 @@ static u32 vcd_set_property_cmn
 			}
 			break;
 		}
-	case VCD_I_SET_TURBO_CLK:
-	{
-		if (cctxt->sched_clnt_hdl)
-			rc = vcd_set_perf_turbo_level(cctxt);
-		break;
-	}
 	case VCD_I_INTRA_PERIOD:
 	   {
 		  struct vcd_property_i_period *iperiod =
@@ -554,6 +548,10 @@ static u32 vcd_set_property_cmn
 		  cctxt->bframe = iperiod->b_frames;
 		  break;
 	   }
+	case VCD_REQ_PERF_LEVEL:
+		rc = vcd_req_perf_level(cctxt,
+			(struct vcd_property_perf_level *)prop_val);
+		break;
 	case VCD_I_VOP_TIMING_CONSTANT_DELTA:
 	   {
 		   struct vcd_property_vop_timing_constant_delta *delta =
@@ -568,10 +566,6 @@ static u32 vcd_set_property_cmn
 		   }
 		   break;
 	   }
-	case VCD_REQ_PERF_LEVEL:
-		rc = vcd_req_perf_level(cctxt,
-			(struct vcd_property_perf_level *)prop_val);
-		break;
 	default:
 		{
 			break;
