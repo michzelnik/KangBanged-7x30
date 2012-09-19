@@ -196,4 +196,24 @@ int msm_fb_v4l2_update(void *par,
 	unsigned long srcp1_addr, unsigned long srcp1_size,
 	unsigned long srcp2_addr, unsigned long srcp2_size);
 
+/*
+ * This is used to communicate event between msm_fb, mddi, mddi_client,
+ * and board.
+ * It's mainly used to reset the display system.
+ * Also, it is used for battery power policy.
+ *
+ */
+#define NOTIFY_MDDI     0x00000000
+#define NOTIFY_POWER    0x00000001
+#define NOTIFY_MSM_FB   0x00000010
+
+extern int register_display_notifier(struct notifier_block *nb);
+extern int display_notifier_call_chain(unsigned long val, void *data);
+
+#define display_notifier(fn, pri) {                     \
+	static struct notifier_block fn##_nb =          \
+	{ .notifier_call = fn, .priority = pri };       \
+	register_display_notifier(&fn##_nb);		\
+}
+
 #endif

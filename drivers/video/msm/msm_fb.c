@@ -1068,6 +1068,30 @@ static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 		return xres * bpp;
 }
 
+static BLOCKING_NOTIFIER_HEAD(display_chain_head);
+int register_display_notifier(struct notifier_block *nb)
+{
+	return blocking_notifier_chain_register(&display_chain_head, nb);
+}
+
+static int display_notifier_callback(struct notifier_block *nfb,
+		unsigned long action, void *ignored)
+{
+	switch (action) {
+	case NOTIFY_MSM_FB:
+		PR_DISP_DEBUG("NOTIFY_MSM_FB\n");
+		break;
+	case NOTIFY_POWER:
+		/* nothing to do */
+		break;
+	default:
+		PR_DISP_ERR("%s: unknown action in 0x%lx\n",
+				__func__, action);
+		return NOTIFY_BAD;
+	}
+	return NOTIFY_OK;
+}
+
 static int msm_fb_register(struct msm_fb_data_type *mfd)
 {
 	int ret = -ENODEV;
@@ -1422,6 +1446,9 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	if (!load_565rle_image(INIT_IMAGE_FILE, bf_supported))
 		;
 #endif
+	/* Jay, 29/12/08' */
+	display_notifier(display_notifier_callback, NOTIFY_MSM_FB);
+
 	ret = 0;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -3230,7 +3257,24 @@ static int msmfb_handle_pp_ioctl(struct msm_fb_data_type *mfd,
 
 	return ret;
 }
-
+static int msmfb_handle_metadata_ioctl(struct msm_fb_data_type *mfd,
+				struct msmfb_metadata *metadata_ptr)
+{
+	int ret;
+	switch (metadata_ptr->op) {
+#ifdef CONFIG_FB_MSM_MDP40
+	case metadata_op_base_blend:
+		ret = mdp4_update_base_blend(mfd,
+						&metadata_ptr->data.blend_cfg);
+		break;
+#endif
+	default:
+		pr_warn("Unsupported request to MDP META IOCTL.\n");
+		ret = -EINVAL;
+		break;
+	}
+	return ret;
+}
 static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			unsigned long arg)
 {
@@ -3248,6 +3292,7 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 #endif
 	struct mdp_page_protection fb_page_protection;
 	struct msmfb_mdp_pp mdp_pp;
+	struct msmfb_metadata mdp_metadata;
 	int ret = 0;
 
 	switch (cmd) {
@@ -3545,6 +3590,13 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			return ret;
 
 		ret = msmfb_handle_pp_ioctl(mfd, &mdp_pp);
+		break;
+
+	case MSMFB_METADATA_SET:
+		ret = copy_from_user(&mdp_metadata, argp, sizeof(mdp_metadata));
+		if (ret)
+			return ret;
+		ret = msmfb_handle_metadata_ioctl(mfd, &mdp_metadata);
 		break;
 
 	default:
