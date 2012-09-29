@@ -151,7 +151,8 @@ our $Sparse	= qr{
 			__must_check|
 			__init_refok|
 			__kprobes|
-			__ref
+			__ref|
+			__rcu
 		}x;
 
 # Notes to $Attribute:
@@ -222,6 +223,16 @@ our $logFunctions = qr{(?x:
 	MODULE_[A-Z_]+
 )};
 
+our $signature_tags = qr{(?xi:
+	Signed-off-by:|
+	Acked-by:|
+	Tested-by:|
+	Reviewed-by:|
+	Reported-by:|
+	To:|
+	Cc:
+)};
+
 our @typeList = (
 	qr{void},
 	qr{(?:unsigned\s+)?char},
@@ -273,6 +284,20 @@ sub build_types {
 	$Declare	= qr{(?:$Storage\s+)?$Type};
 }
 build_types();
+
+our $match_balanced_parentheses = qr/(\((?:[^\(\)]+|(-1))*\))/;
+
+our $Typecast	= qr{\s*(\(\s*$NonptrType\s*\)){0,1}\s*};
+our $LvalOrFunc	= qr{($Lval)\s*($match_balanced_parentheses{0,1})\s*};
+
+sub deparenthesize {
+	my ($string) = @_;
+	return "" if (!defined($string));
+	$string =~ s@^\s*\(\s*@@g;
+	$string =~ s@\s*\)\s*$@@g;
+	$string =~ s@\s+@ @g;
+	return $string;
+}
 
 $chk_signoff = 0 if ($file);
 
@@ -345,6 +370,76 @@ sub top_of_kernel_tree {
 		}
 	}
 	return 1;
+}
+
+sub parse_email {
+	my ($formatted_email) = @_;
+
+	my $name = "";
+	my $address = "";
+	my $comment = "";
+
+	if ($formatted_email =~ /^(.*)<(\S+\@\S+)>(.*)$/) {
+		$name = $1;
+		$address = $2;
+		$comment = $3 if defined $3;
+	} elsif ($formatted_email =~ /^\s*<(\S+\@\S+)>(.*)$/) {
+		$address = $1;
+		$comment = $2 if defined $2;
+	} elsif ($formatted_email =~ /(\S+\@\S+)(.*)$/) {
+		$address = $1;
+		$comment = $2 if defined $2;
+		$formatted_email =~ s/$address.*$//;
+		$name = $formatted_email;
+		$name =~ s/^\s+|\s+$//g;
+		$name =~ s/^\"|\"$//g;
+		# If there's a name left after stripping spaces and
+		# leading quotes, and the address doesn't have both
+		# leading and trailing angle brackets, the address
+		# is invalid. ie:
+		#   "joe smith joe@smith.com" bad
+		#   "joe smith <joe@smith.com" bad
+		if ($name ne "" && $address !~ /^<[^>]+>$/) {
+			$name = "";
+			$address = "";
+			$comment = "";
+		}
+	}
+
+	$name =~ s/^\s+|\s+$//g;
+	$name =~ s/^\"|\"$//g;
+	$address =~ s/^\s+|\s+$//g;
+	$address =~ s/^\<|\>$//g;
+
+	if ($name =~ /[^\w \-]/i) { ##has "must quote" chars
+		$name =~ s/(?<!\\)"/\\"/g; ##escape quotes
+		$name = "\"$name\"";
+	}
+
+	return ($name, $address, $comment);
+}
+
+sub format_email {
+	my ($name, $address) = @_;
+
+	my $formatted_email;
+
+	$name =~ s/^\s+|\s+$//g;
+	$name =~ s/^\"|\"$//g;
+	$address =~ s/^\s+|\s+$//g;
+
+	if ($name =~ /[^\w \-]/i) { ##has "must quote" chars
+		$name =~ s/(?<!\\)"/\\"/g; ##escape quotes
+		$name = "\"$name\"";
+	}
+
+	if ("$name" eq "") {
+		$formatted_email = "$address";
+	} else {
+		$formatted_email = "$name <$address>";
+	}
+
+	return $formatted_email;
 }
 
 sub expand_tabs {
@@ -1475,17 +1570,44 @@ sub process {
 			}
 		}
 
-#check the patch for a signoff:
+# Check the patch for a signoff:
 		if ($line =~ /^\s*signed-off-by:/i) {
-			# This is a signoff, if ugly, so do not double report.
 			$signoff++;
-			if (!($line =~ /^\s*Signed-off-by:/)) {
-				WARN("Signed-off-by: is the preferred form\n" .
-					$herecurr);
+		}
+
+# Check signature styles
+		if ($line =~ /^(\s*)($signature_tags)(\s*)(.*)/) {
+			my $space_before = $1;
+			my $sign_off = $2;
+			my $space_after = $3;
+			my $email = $4;
+			my $ucfirst_sign_off = ucfirst(lc($sign_off));
+
+			if (defined $space_before && $space_before ne "") {
+				WARN("Do not use whitespace before $ucfirst_sign_off\n" . $herecurr);
 			}
-			if ($line =~ /^\s*signed-off-by:\S/i) {
-				WARN("space required after Signed-off-by:\n" .
-					$herecurr);
+			if ($sign_off =~ /-by:$/i && $sign_off ne $ucfirst_sign_off) {
+				WARN("'$ucfirst_sign_off' is the preferred signature form\n" . $herecurr);
+			}
+			if (!defined $space_after || $space_after ne " ") {
+				WARN("Use a single space after $ucfirst_sign_off\n" . $herecurr);
+			}
+
+			my ($email_name, $email_address, $comment) = parse_email($email);
+			my $suggested_email = format_email(($email_name, $email_address));
+			if ($suggested_email eq "") {
+				ERROR("Unrecognized email address: '$email'\n" . $herecurr);
+			} else {
+				my $dequoted = $suggested_email;
+				$dequoted =~ s/^"//;
+				$dequoted =~ s/" </ </;
+				# Don't force email to have quotes
+				# Allow just an angle bracketed address
+				if ("$dequoted$comment" ne $email &&
+				    "<$email_address>$comment" ne $email &&
+				    "$suggested_email$comment" ne $email) {
+					WARN("email address '$email' might be better as '$suggested_email$comment'\n" . $herecurr);
+				}
 			}
 			if ($line =~ /^\s*signed-off-by:.*(quicinc|qualcomm)\.com/i) {
 				WARN("invalid Signed-off-by identity\n" . $line );
@@ -2372,6 +2494,27 @@ sub process {
 			}
 		}
 
+# typecasts on min/max could be min_t/max_t
+		if ($line =~ /^\+(?:.*?)\b(min|max)\s*\($Typecast{0,1}($LvalOrFunc)\s*,\s*$Typecast{0,1}($LvalOrFunc)\s*\)/) {
+			if (defined $2 || defined $8) {
+				my $call = $1;
+				my $cast1 = deparenthesize($2);
+				my $arg1 = $3;
+				my $cast2 = deparenthesize($8);
+				my $arg2 = $9;
+				my $cast;
+
+				if ($cast1 ne "" && $cast2 ne "") {
+					$cast = "$cast1 or $cast2";
+				} elsif ($cast1 ne "") {
+					$cast = $cast1;
+				} else {
+					$cast = $cast2;
+				}
+				WARN("$call() should probably be ${call}_t($cast, $arg1, $arg2)\n" . $herecurr);
+			}
+		}
+
 # Need a space before open parenthesis after if, while etc
 		if ($line=~/\b(if|while|for|switch)\(/) {
 			ERROR("space required before the open parenthesis '('\n" . $herecurr);
@@ -2907,6 +3050,11 @@ sub process {
 # Check for __attribute__ packed, prefer __packed
 		if ($line =~ /\b__attribute__\s*\(\s*\(.*\bpacked\b/) {
 			WARN("__packed is preferred over __attribute__((packed))\n" . $herecurr);
+		}
+
+# Check for __attribute__ aligned, prefer __aligned
+		if ($line =~ /\b__attribute__\s*\(\s*\(.*aligned/) {
+			WARN("__aligned(size) is preferred over __attribute__((aligned(size)))\n" . $herecurr);
 		}
 
 # check for sizeof(&)

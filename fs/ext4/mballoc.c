@@ -1128,7 +1128,7 @@ ext4_mb_load_buddy(struct super_block *sb, ext4_group_t group,
 	grp = ext4_get_group_info(sb, group);
 
 	e4b->bd_blkbits = sb->s_blocksize_bits;
-	e4b->bd_info = ext4_get_group_info(sb, group);
+	e4b->bd_info = grp;
 	e4b->bd_sb = sb;
 	e4b->bd_group = group;
 	e4b->bd_buddy_page = NULL;
@@ -1284,7 +1284,7 @@ static void mb_clear_bits(void *bm, int cur, int len)
 	}
 }
 
-static void mb_set_bits(void *bm, int cur, int len)
+void ext4_set_bits(void *bm, int cur, int len)
 {
 	__u32 *addr;
 
@@ -1525,7 +1525,7 @@ static int mb_mark_used(struct ext4_buddy *e4b, struct ext4_free_extent *ex)
 	}
 	mb_set_largest_free_order(e4b->bd_sb, e4b->bd_info);
 
-	mb_set_bits(EXT4_MB_BITMAP(e4b), ex->fe_start, len0);
+	ext4_set_bits(EXT4_MB_BITMAP(e4b), ex->fe_start, len0);
 	mb_check_buddy(e4b);
 
 	return ret;
@@ -2589,7 +2589,7 @@ int ext4_mb_release(struct super_block *sb)
 				atomic_read(&sbi->s_mb_lost_chunks));
 		printk(KERN_INFO
 		       "EXT4-fs: mballoc: %lu generated and it took %Lu\n",
-				sbi->s_mb_buddies_generated++,
+				sbi->s_mb_buddies_generated,
 				sbi->s_mb_generation_time);
 		printk(KERN_INFO
 		       "EXT4-fs: mballoc: %u preallocated, %u discarded\n",
@@ -2792,8 +2792,8 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
 		 * We leak some of the blocks here.
 		 */
 		ext4_lock_group(sb, ac->ac_b_ex.fe_group);
-		mb_set_bits(bitmap_bh->b_data, ac->ac_b_ex.fe_start,
-			    ac->ac_b_ex.fe_len);
+		ext4_set_bits(bitmap_bh->b_data, ac->ac_b_ex.fe_start,
+			      ac->ac_b_ex.fe_len);
 		ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
 		err = ext4_handle_dirty_metadata(handle, NULL, bitmap_bh);
 		if (!err)
@@ -2811,7 +2811,8 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
 		}
 	}
 #endif
-	mb_set_bits(bitmap_bh->b_data, ac->ac_b_ex.fe_start,ac->ac_b_ex.fe_len);
+	ext4_set_bits(bitmap_bh->b_data, ac->ac_b_ex.fe_start,
+		      ac->ac_b_ex.fe_len);
 	if (gdp->bg_flags & cpu_to_le16(EXT4_BG_BLOCK_UNINIT)) {
 		gdp->bg_flags &= cpu_to_le16(~EXT4_BG_BLOCK_UNINIT);
 		ext4_free_blks_set(sb, gdp,
@@ -3283,7 +3284,7 @@ static void ext4_mb_generate_from_freelist(struct super_block *sb, void *bitmap,
 
 	while (n) {
 		entry = rb_entry(n, struct ext4_free_data, node);
-		mb_set_bits(bitmap, entry->start_blk, entry->count);
+		ext4_set_bits(bitmap, entry->start_blk, entry->count);
 		n = rb_next(n);
 	}
 	return;
@@ -3325,7 +3326,7 @@ void ext4_mb_generate_from_pa(struct super_block *sb, void *bitmap,
 		if (unlikely(len == 0))
 			continue;
 		BUG_ON(groupnr != group);
-		mb_set_bits(bitmap, start, len);
+		ext4_set_bits(bitmap, start, len);
 		preallocated += len;
 		count++;
 	}
@@ -4667,7 +4668,7 @@ error_return:
 }
 
 /**
- * ext4_add_groupblocks() -- Add given blocks to an existing group
+ * ext4_group_add_blocks() -- Add given blocks to an existing group
  * @handle:			handle to this transaction
  * @sb:				super block
  * @block:			start physcial block to add to the block group
@@ -4675,7 +4676,7 @@ error_return:
  *
  * This marks the blocks as free in the bitmap and buddy.
  */
-void ext4_add_groupblocks(handle_t *handle, struct super_block *sb,
+int ext4_group_add_blocks(handle_t *handle, struct super_block *sb,
 			 ext4_fsblk_t block, unsigned long count)
 {
 	struct buffer_head *bitmap_bh = NULL;
@@ -4692,21 +4693,33 @@ void ext4_add_groupblocks(handle_t *handle, struct super_block *sb,
 
 	ext4_debug("Adding block(s) %llu-%llu\n", block, block + count - 1);
 
+	if (count == 0)
+		return 0;
+
 	ext4_get_group_no_and_offset(sb, block, &block_group, &bit);
 	grp = ext4_get_group_info(sb, block_group);
 	/*
 	 * Check to see if we are freeing blocks across a group
 	 * boundary.
 	 */
-	if (bit + count > EXT4_BLOCKS_PER_GROUP(sb))
+	if (bit + count > EXT4_BLOCKS_PER_GROUP(sb)) {
+		ext4_warning(sb, "too much blocks added to group %u\n",
+			     block_group);
+		err = -EINVAL;
 		goto error_return;
+	}
 
 	bitmap_bh = ext4_read_block_bitmap(sb, block_group);
-	if (!bitmap_bh)
+	if (!bitmap_bh) {
+		err = -EIO;
 		goto error_return;
+	}
+
 	desc = ext4_get_group_desc(sb, block_group, &gd_bh);
-	if (!desc)
+	if (!desc) {
+		err = -EIO;
 		goto error_return;
+	}
 
 	if (in_range(ext4_block_bitmap(sb, desc), block, count) ||
 	    in_range(ext4_inode_bitmap(sb, desc), block, count) ||
@@ -4716,6 +4729,7 @@ void ext4_add_groupblocks(handle_t *handle, struct super_block *sb,
 		ext4_error(sb, "Adding blocks in system zones - "
 			   "Block = %llu, count = %lu",
 			   block, count);
+		err = -EINVAL;
 		goto error_return;
 	}
 
@@ -4784,7 +4798,7 @@ void ext4_add_groupblocks(handle_t *handle, struct super_block *sb,
 error_return:
 	brelse(bitmap_bh);
 	ext4_std_error(sb, err);
-	return;
+	return err;
 }
 
 /**

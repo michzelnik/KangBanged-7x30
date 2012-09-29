@@ -184,7 +184,7 @@ Why:	/proc/<pid>/oom_adj allows userspace to influence the oom killer's
 
 	A much more powerful interface, /proc/<pid>/oom_score_adj, was
 	introduced with the oom killer rewrite that allows users to increase or
-	decrease the badness() score linearly.  This interface will replace
+	decrease the badness score linearly.  This interface will replace
 	/proc/<pid>/oom_adj.
 
 	A warning will be emitted to the kernel log if an application uses this
@@ -474,13 +474,6 @@ Who:	FUJITA Tomonori <fujita.tomonori@lab.ntt.co.jp>
 
 ----------------------------
 
-What: 	DMA_xxBIT_MASK macros
-When:	Jun 2011
-Why:	DMA_xxBIT_MASK macros were replaced with DMA_BIT_MASK() macros.
-Who:	FUJITA Tomonori <fujita.tomonori@lab.ntt.co.jp>
-
-----------------------------
-
 What:	iwlwifi disable_hw_scan module parameters
 When:	2.6.40
 Why:	Hareware scan is the prefer method for iwlwifi devices for
@@ -501,16 +494,6 @@ Who:    NeilBrown <neilb@suse.de>
 
 ----------------------------
 
-What:	cancel_rearming_delayed_work[queue]()
-When:	2.6.39
-
-Why:	The functions have been superceded by cancel_delayed_work_sync()
-	quite some time ago.  The conversion is trivial and there is no
-	in-kernel user left.
-Who:	Tejun Heo <tj@kernel.org>
-
-----------------------------
-
 What:	Legacy, non-standard chassis intrusion detection interface.
 When:	June 2011
 Why:	The adm9240, w83792d and w83793 hardware monitoring drivers have
@@ -525,22 +508,6 @@ What:	xt_connlimit rev 0
 When:	2012
 Who:	Jan Engelhardt <jengelh@medozas.de>
 Files:	net/netfilter/xt_connlimit.c
-
-----------------------------
-
-What:	noswapaccount kernel command line parameter
-When:	2.6.40
-Why:	The original implementation of memsw feature enabled by
-	CONFIG_CGROUP_MEM_RES_CTLR_SWAP could be disabled by the noswapaccount
-	kernel parameter (introduced in 2.6.29-rc1). Later on, this decision
-	turned out to be not ideal because we cannot have the feature compiled
-	in and disabled by default and let only interested to enable it
-	(e.g. general distribution kernels might need it). Therefore we have
-	added swapaccount[=0|1] parameter (introduced in 2.6.37) which provides
-	the both possibilities. If we remove noswapaccount we will have
-	less command line parameters with the same functionality and we
-	can also cleanup the parameter handling a bit ().
-Who:	Michal Hocko <mhocko@suse.cz>
 
 ----------------------------
 
