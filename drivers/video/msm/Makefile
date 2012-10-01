@@ -172,7 +172,7 @@ obj-y += msm_fb_panel.o
 obj-$(CONFIG_FB_MSM_EBI2_EPSON_S1D_QVGA_PANEL) += ebi2_epson_s1d_qvga.o
 endif
 
-obj-$(CONFIG_FB_MSM_SAGA_PANEL) += lcdc_sony_wvga.o mddi_renesas_R61408_wvga.o
+obj-$(CONFIG_FB_MSM_SAGA_PANEL) += lcdc_sony_wvga.o
 obj-$(CONFIG_FB_MSM_SPADE_PANEL) += lcdc_spade_wvga.o
 obj-$(CONFIG_FB_MSM_VISION_PANEL) += lcdc_sony_wvga.o lcdc_samsung_s6e63m0_wvga.o lcdc_samsung_tl2796a_wvga.o
 

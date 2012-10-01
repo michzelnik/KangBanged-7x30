@@ -388,7 +388,6 @@ config FB_MSM_SAGA_PANEL
 	depends on FB_MSM_LCDC_HW && MACH_SAGA
 	bool "LCDC Saga WVGA Panels"
 	select FB_MSM_LCDC_PANEL
-	select FB_MSM_MDDI
 	---help---
 	  Support for Saga WVGA (800x480) panels
 
