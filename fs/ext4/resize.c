@@ -1869,7 +1869,7 @@ int ext4_resize_fs(struct super_block *sb, ext4_fsblk_t n_blocks_count)
 	ext4_fsblk_t o_blocks_count;
 	ext4_group_t o_group;
 	ext4_group_t n_group;
-	ext4_grpblk_t offset, add;
+	ext4_grpblk_t offset;
 	unsigned long n_desc_blocks;
 	unsigned long o_desc_blocks;
 	unsigned long desc_blocks;
@@ -1892,7 +1892,7 @@ int ext4_resize_fs(struct super_block *sb, ext4_fsblk_t n_blocks_count)
 		return 0;
 
 	ext4_get_group_no_and_offset(sb, n_blocks_count - 1, &n_group, &offset);
-	ext4_get_group_no_and_offset(sb, o_blocks_count - 1, &o_group, &offset);
+	ext4_get_group_no_and_offset(sb, o_blocks_count, &o_group, &offset);
 
 	n_desc_blocks = (n_group + EXT4_DESC_PER_BLOCK(sb)) /
 			EXT4_DESC_PER_BLOCK(sb);
@@ -1921,12 +1921,10 @@ int ext4_resize_fs(struct super_block *sb, ext4_fsblk_t n_blocks_count)
 	}
 	brelse(bh);
 
-	/* extend the last group */
-	if (n_group == o_group)
-		add = n_blocks_count - o_blocks_count;
-	else
-		add = EXT4_BLOCKS_PER_GROUP(sb) - (offset + 1);
-	if (add > 0) {
+	if (offset != 0) {
+		/* extend the last group */
+		ext4_grpblk_t add;
+		add = EXT4_BLOCKS_PER_GROUP(sb) - offset;
 		err = ext4_group_extend_no_check(sb, o_blocks_count, add);
 		if (err)
 			goto out;
