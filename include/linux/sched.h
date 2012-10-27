@@ -1633,7 +1633,7 @@ static inline int runqueue_is_locked(int cpu)
 
 static inline void print_scheduler_version(void)
 {
-	printk(KERN_INFO"BFS CPU scheduler v0.414 by Con Kolivas.\n");
+	printk(KERN_INFO"BFS CPU scheduler v0.415 by Con Kolivas.\n");
 }
 
 static inline bool iso_task(struct task_struct *p)
