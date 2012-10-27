@@ -1058,7 +1058,7 @@ swap_sticky(struct rq *rq, int cpu, struct task_struct *p)
 {
 	if (rq->sticky_task) {
 		if (rq->sticky_task == p) {
-			p->sticky = 1;
+			p->sticky = true;
 			return;
 		}
 		if (task_sticky(rq->sticky_task)) {
@@ -1067,7 +1067,7 @@ swap_sticky(struct rq *rq, int cpu, struct task_struct *p)
 		}
 	}
 	if (!rt_task(p)) {
-		p->sticky = 1;
+		p->sticky = true;
 		rq->sticky_task = p;
 	} else {
 		resched_closest_idle(rq, cpu, p);
