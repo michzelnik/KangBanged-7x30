@@ -998,6 +998,8 @@ static void activate_task(struct task_struct *p, struct rq *rq)
 	inc_qnr();
 }
 
+static inline void clear_sticky(struct task_struct *p);
+
 /*
  * deactivate_task - If it's running, it's not on the grq and we can just
  * decrement the nr_running. Enter with grq locked.
@@ -1007,6 +1009,7 @@ static inline void deactivate_task(struct task_struct *p)
 	if (task_contributes_to_load(p))
 		grq.nr_uninterruptible++;
 	grq.nr_running--;
+	clear_sticky(p);
 }
 
 #ifdef CONFIG_SMP
