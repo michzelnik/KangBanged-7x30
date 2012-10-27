@@ -6913,7 +6913,7 @@ void __init sched_init(void)
 		rq->cache_idle = sole_cpu_idle;
 		cpumask_set_cpu(i, &rq->cache_siblings);
 #endif
-		rq->cpu_locality = kmalloc(nr_cpu_ids * sizeof(int), GFP_ATOMIC);
+		rq->cpu_locality = kmalloc(nr_cpu_ids * sizeof(int *), GFP_ATOMIC);
 		for_each_possible_cpu(j) {
 			if (i == j)
 				rq->cpu_locality[j] = 0;
