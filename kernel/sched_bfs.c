@@ -3202,11 +3202,9 @@ need_resched:
 		set_cpuidle_map(cpu);
 	} else {
 		next = earliest_deadline_task(rq, cpu, idle);
-		if (likely(next->prio != PRIO_LIMIT)) {
-			prefetch(next);
-			prefetch_stack(next);
+		if (likely(next->prio != PRIO_LIMIT))
 			clear_cpuidle_map(cpu);
-		} else
+		else
 			set_cpuidle_map(cpu);
 	}
 
