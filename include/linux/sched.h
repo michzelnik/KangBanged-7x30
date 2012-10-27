@@ -1619,6 +1619,7 @@ bool grunqueue_is_locked(void);
 void grq_unlock_wait(void);
 void cpu_scaling(int cpu);
 void cpu_nonscaling(int cpu);
+int above_background_load(void);
 #define tsk_seruntime(t)		((t)->sched_time)
 #define tsk_rttimeout(t)		((t)->rt_timeout)
 
@@ -1665,6 +1666,12 @@ static inline void print_scheduler_version(void)
 static inline bool iso_task(struct task_struct *p)
 {
 	return false;
+}
+
+/* Anyone feel like implementing this? */
+static inline int above_background_load(void)
+{
+	return 1;
 }
 #endif /* CONFIG_SCHED_BFS */
 
