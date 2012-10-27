@@ -1010,7 +1010,7 @@ static inline void deactivate_task(struct task_struct *p)
 }
 
 #ifdef CONFIG_SMP
-void set_task_cpu(struct task_struct *p, int cpu)
+void set_task_cpu(struct task_struct *p, unsigned int cpu)
 {
 #ifdef CONFIG_LOCKDEP
 	/*

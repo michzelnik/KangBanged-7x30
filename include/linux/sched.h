@@ -2682,16 +2682,16 @@ extern void signal_wake_up(struct task_struct *t, int resume_stopped);
  */
 #ifdef CONFIG_SMP
 
-static inline int task_cpu(const struct task_struct *p)
+static inline unsigned int task_cpu(const struct task_struct *p)
 {
 	return task_thread_info(p)->cpu;
 }
 
-extern void set_task_cpu(struct task_struct *p, int cpu);
+extern void set_task_cpu(struct task_struct *p, unsigned int cpu);
 
 #else
 
-static inline int task_cpu(const struct task_struct *p)
+static inline unsigned int task_cpu(const struct task_struct *p)
 {
 	return 0;
 }
