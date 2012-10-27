@@ -230,7 +230,7 @@ struct rq {
 #endif
 #endif
 
-	struct task_struct *curr, *idle, *stop, *preempt;
+	struct task_struct *curr, *idle, *stop;
 	struct mm_struct *prev_mm;
 
 	/* Stored data about rq->curr to work outside grq lock */
@@ -719,18 +719,6 @@ static inline int task_timeslice(struct task_struct *p)
 	return (rr_interval * task_prio_ratio(p) / 128);
 }
 
-static void resched_task(struct task_struct *p);
-
-static inline void preempt_rq(struct rq *rq, struct task_struct *p)
-{
-	rq->preempt = p;
-	/* We set the runqueue's apparent priority to the task that will
-	 * replace the current one in case something else tries to preempt
-	 * this runqueue before p gets scheduled */
-	rq->rq_prio = p->prio;
-	resched_task(rq->curr);
-}
-
 #ifdef CONFIG_SMP
 /*
  * qnr is the "queued but not running" count which is the total number of
@@ -786,6 +774,8 @@ static bool suitable_idle_cpus(struct task_struct *p)
 #define CPUIDLE_DIFF_CPU	(8)
 #define CPUIDLE_THREAD_BUSY	(16)
 #define CPUIDLE_DIFF_NODE	(32)
+
+static void resched_task(struct task_struct *p);
 
 /*
  * The best idle CPU is chosen according to the CPUIDLE ranking above where the
@@ -845,7 +835,7 @@ resched_best_mask(int best_cpu, struct rq *rq, cpumask_t *tmpmask)
 		}
 	}
 
-	preempt_rq(cpu_rq(best_cpu), p);
+	resched_task(cpu_rq(best_cpu)->curr);
 }
 
 static void resched_best_idle(struct task_struct *p)
@@ -1387,12 +1377,11 @@ static inline bool needs_other_cpu(struct task_struct *p, int cpu)
 }
 
 /*
- * latest_deadline and highest_prio_rq are initialised only to silence the
- * compiler. When all else is equal, still prefer this_rq.
+ * When all else is equal, still prefer this_rq.
  */
 static void try_preempt(struct task_struct *p, struct rq *this_rq)
 {
-	struct rq *highest_prio_rq = this_rq;
+	struct rq *highest_prio_rq;
 	int cpu, highest_prio;
 	u64 latest_deadline;
 	cpumask_t tmp;
@@ -1418,8 +1407,9 @@ static void try_preempt(struct task_struct *p, struct rq *this_rq)
 	else
 		return;
 
-	latest_deadline = 0;
 	highest_prio = p->prio;
+	highest_prio_rq = this_rq;
+	latest_deadline = this_rq->rq_deadline;
 
 	for_each_cpu_mask(cpu, tmp) {
 		struct rq *rq;
@@ -2957,19 +2947,11 @@ static inline void check_deadline(struct task_struct *p)
 static inline struct
 task_struct *earliest_deadline_task(struct rq *rq, int cpu, struct task_struct *idle)
 {
-	struct task_struct *p, *edt, *rqpreempt = rq->preempt;
 	u64 dl, uninitialized_var(earliest_deadline);
+	struct task_struct *p, *edt = idle;
 	struct list_head *queue;
 	int idx = 0;
 
-	if (rqpreempt) {
-		rq->preempt = NULL;
-		if (task_queued(rqpreempt)) {
-			edt = rqpreempt;
-			goto out_take;
-		}
-	}
-	edt = idle;
 retry:
 	idx = find_next_bit(grq.prio_bitmap, PRIO_LIMIT, idx);
 	if (idx >= PRIO_LIMIT)
@@ -6875,7 +6857,6 @@ void __init sched_init(void)
 		rq->user_pc = rq->nice_pc = rq->softirq_pc = rq->system_pc =
 			      rq->iowait_pc = rq->idle_pc = 0;
 		rq->dither = false;
-		rq->preempt = NULL;
 #ifdef CONFIG_SMP
 		rq->sticky_task = NULL;
 		rq->last_niffy = 0;
