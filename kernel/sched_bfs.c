@@ -804,13 +804,12 @@ static bool suitable_idle_cpus(struct task_struct *p)
  * Other node, other CPU, busy threads.
  */
 static void
-resched_best_mask(cpumask_t *tmpmask, struct task_struct *p)
+resched_best_mask(int best_cpu, struct rq *rq, cpumask_t *tmpmask)
 {
 	unsigned int best_ranking = CPUIDLE_DIFF_NODE | CPUIDLE_THREAD_BUSY |
 		CPUIDLE_DIFF_CPU | CPUIDLE_CACHE_BUSY | CPUIDLE_DIFF_CORE |
 		CPUIDLE_DIFF_THREAD;
-	int cpu_tmp, best_cpu = task_cpu(p);
-	struct rq *rq = task_rq(p);
+	int cpu_tmp;
 
 	for_each_cpu_mask(cpu_tmp, *tmpmask) {
 		unsigned int ranking;
@@ -854,7 +853,7 @@ static void resched_best_idle(struct task_struct *p)
 	cpumask_t tmpmask;
 
 	cpus_and(tmpmask, p->cpus_allowed, grq.cpu_idle_map);
-	resched_best_mask(&tmpmask, p);
+	resched_best_mask(task_cpu(p), task_rq(p), &tmpmask);
 }
 
 static inline void resched_suitable_idle(struct task_struct *p)
@@ -1054,7 +1053,7 @@ resched_closest_idle(struct rq *rq, int cpu, struct task_struct *p)
 	cpu_clear(cpu, tmpmask);
 	if (cpus_empty(tmpmask))
 		return;
-	resched_best_mask(&tmpmask, p);
+	resched_best_mask(cpu, rq, &tmpmask);
 }
 
 /*
