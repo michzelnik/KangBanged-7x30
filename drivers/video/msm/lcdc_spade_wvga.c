@@ -725,10 +725,12 @@ static int lcdc_spade_panel_off(struct platform_device *pdev)
 	mutex_lock(&panel_lock);
 	switch (panel_type) {
 		case PANEL_AUO:
+			lcm_auo_write_seq(auo_sleep_in_seq, ARRAY_SIZE(auo_sleep_in_seq));
 			lcm_auo_write_seq(auo_uninit_seq, ARRAY_SIZE(auo_uninit_seq));
 			LCMDBG(": uninit auo_panel\n");
 			break;
 		case PANEL_ID_SPADE_AUO_N90:
+			lcm_auo_write_seq(auo_n90_sleep_in_seq, ARRAY_SIZE(auo_n90_sleep_in_seq));
 			lcm_auo_write_seq(auo_n90_uninit_seq, ARRAY_SIZE(auo_n90_uninit_seq));
 			LCMDBG(": uninit auo_n90_panel\n");
 			break;
